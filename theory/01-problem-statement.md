@@ -153,12 +153,3 @@ Safety guarantees emerge from the combination of capable models and structured e
 
 Continue to [Core Principles](./02-core-principles.md) to see how Reasoning Environments address these problems.
 
----
-
-## References
-
-- Situated cognition literature
-- Bounded rationality (Simon)
-- Ecological rationality (Gigerenzer)
-- Context-dependent reasoning research
-
