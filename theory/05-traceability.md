@@ -308,6 +308,199 @@ Verify that inferences are reasonable given observations.
 
 ---
 
+## Pseudocode: Traceability Implementation
+
+### Source Attribution System
+
+```pseudocode
+class TraceableEntity:
+    id: string           # Unique identifier (e.g., "PP-12")
+    content: string      # The actual content
+    sources: List[SourceReference]
+    derived_from: List[EntityReference]
+    referenced_by: List[EntityReference]
+
+class SourceReference:
+    file_path: string
+    line_number: int?
+    quote: string?
+    context: string?
+
+function create_traceable_entity(content, sources):
+    entity = TraceableEntity(
+        id: generate_unique_id(),
+        content: content,
+        sources: validate_sources(sources),
+        derived_from: [],
+        referenced_by: []
+    )
+    
+    # Validate source attribution
+    if len(entity.sources) == 0:
+        raise Error("Entity must have at least one source")
+    
+    for source in entity.sources:
+        if not file_exists(source.file_path):
+            raise Error("Source file not found: " + source.file_path)
+    
+    return entity
+```
+
+### Chain Builder
+
+```pseudocode
+function build_traceability_chain(final_output):
+    chain = TraceabilityChain()
+    
+    # Start from final output and trace backwards
+    current_entities = [final_output]
+    
+    while len(current_entities) > 0:
+        next_level = []
+        
+        for entity in current_entities:
+            chain.add_node(entity)
+            
+            # Add links to sources
+            for source in entity.sources:
+                chain.add_link(entity.id, source.file_path, "sourced_from")
+            
+            # Add links to derived entities
+            for parent in entity.derived_from:
+                chain.add_link(entity.id, parent.id, "derived_from")
+                next_level.append(parent)
+        
+        current_entities = next_level
+    
+    return chain
+```
+
+### Chain Validation
+
+```pseudocode
+function validate_chain(chain):
+    errors = []
+    
+    # Check for orphan nodes (no sources)
+    for node in chain.nodes:
+        if len(node.sources) == 0 and len(node.derived_from) == 0:
+            errors.append({
+                type: "ORPHAN_NODE",
+                node: node.id,
+                message: "Node has no sources or parent references"
+            })
+    
+    # Check for broken links
+    for link in chain.links:
+        if not chain.has_node(link.target):
+            errors.append({
+                type: "BROKEN_LINK",
+                source: link.source,
+                target: link.target,
+                message: "Link target does not exist"
+            })
+    
+    # Check source validity
+    for node in chain.nodes:
+        for source in node.sources:
+            if not source_contains_content(source, node.content):
+                errors.append({
+                    type: "SOURCE_MISMATCH",
+                    node: node.id,
+                    source: source.file_path,
+                    message: "Source does not contain claimed content"
+                })
+    
+    return errors
+```
+
+### Audit Trail Generator
+
+```pseudocode
+function generate_audit_trail(recommendation):
+    trail = AuditTrail(recommendation)
+    
+    # Level 1: Direct supporting evidence
+    for evidence in recommendation.supporting_evidence:
+        trail.add_level(1, evidence)
+    
+    # Level 2: Trace to interpretations
+    for evidence in trail.level(1):
+        interpretations = get_derived_from(evidence)
+        for interp in interpretations:
+            trail.add_level(2, interp)
+    
+    # Level 3: Trace to observations
+    for interp in trail.level(2):
+        observations = get_derived_from(interp)
+        for obs in observations:
+            trail.add_level(3, obs)
+    
+    # Level 4: Trace to original sources
+    for obs in trail.level(3):
+        for source in obs.sources:
+            trail.add_level(4, source)
+    
+    return trail
+
+function format_audit_trail(trail):
+    output = "## Audit Trail for: " + trail.root.id + "\n\n"
+    
+    output += "### Recommendation\n"
+    output += trail.root.content + "\n\n"
+    
+    output += "### Supporting Evidence (Level 1)\n"
+    for item in trail.level(1):
+        output += "- " + item.id + ": " + item.summary + "\n"
+    
+    output += "\n### Interpretations (Level 2)\n"
+    for item in trail.level(2):
+        output += "- " + item.id + " [derived from: " + item.derived_from + "]\n"
+    
+    output += "\n### Observations (Level 3)\n"
+    for item in trail.level(3):
+        output += "- " + item.id + " [Source: " + item.sources[0].file_path + "]\n"
+    
+    output += "\n### Original Sources (Level 4)\n"
+    for source in trail.level(4):
+        output += "- " + source.file_path + "\n"
+    
+    return output
+```
+
+### Cross-Reference Index
+
+```pseudocode
+function build_cross_reference_index(all_entities):
+    index = CrossReferenceIndex()
+    
+    for entity in all_entities:
+        # Index by ID
+        index.by_id[entity.id] = entity
+        
+        # Index by source
+        for source in entity.sources:
+            if source.file_path not in index.by_source:
+                index.by_source[source.file_path] = []
+            index.by_source[source.file_path].append(entity.id)
+        
+        # Index by type
+        entity_type = get_type(entity)  # PP, CLU, OPP, etc.
+        if entity_type not in index.by_type:
+            index.by_type[entity_type] = []
+        index.by_type[entity_type].append(entity.id)
+    
+    # Build reverse references
+    for entity in all_entities:
+        for parent_id in entity.derived_from:
+            parent = index.by_id[parent_id]
+            parent.referenced_by.append(entity.id)
+    
+    return index
+```
+
+---
+
 ## Next
 
 Continue to [Evaluation](./06-evaluation.md) to understand how to assess Reasoning Environment quality.

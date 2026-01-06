@@ -262,6 +262,156 @@ The model doesn't need to "want" to comply—non-compliance simply doesn't reach
 
 ---
 
+## Pseudocode: Guardrail Implementation
+
+### Guardrail Validator
+
+```pseudocode
+function validate_output(output, guardrails):
+    violations = []
+    
+    for rule in guardrails.critical:
+        matches = find_pattern(output, rule.forbidden_pattern)
+        for match in matches:
+            violations.append({
+                severity: "CRITICAL",
+                rule: rule.name,
+                found: match.text,
+                location: match.position,
+                required: rule.approved_alternative,
+                auto_fix: generate_fix(match, rule)
+            })
+    
+    for rule in guardrails.warning:
+        matches = find_pattern(output, rule.pattern)
+        for match in matches:
+            violations.append({
+                severity: "WARNING",
+                rule: rule.name,
+                found: match.text,
+                suggestion: rule.suggestion
+            })
+    
+    return violations
+```
+
+### Enforcement Gate
+
+```pseudocode
+function enforce_guardrails(output, violations):
+    critical_violations = filter(violations, severity == "CRITICAL")
+    
+    if len(critical_violations) > 0:
+        # Block delivery
+        display_violations(critical_violations)
+        display_auto_fixes(critical_violations)
+        
+        return {
+            status: "BLOCKED",
+            message: "Output contains critical violations",
+            violations: critical_violations,
+            next_action: "Apply fixes and re-submit"
+        }
+    
+    warnings = filter(violations, severity == "WARNING")
+    
+    if len(warnings) > 0:
+        display_warnings(warnings)
+        
+        if not user_confirms_override():
+            return {
+                status: "PENDING",
+                message: "Warnings require acknowledgment",
+                warnings: warnings
+            }
+    
+    # Output approved
+    return {
+        status: "APPROVED",
+        message: "Guardrail check passed"
+    }
+```
+
+### Pattern Detection Rules
+
+```pseudocode
+guardrails = {
+    critical: [
+        {
+            name: "untagged_dollar_amount",
+            forbidden_pattern: /\$[\d,]+(?!\s*\[)/,
+            approved_alternative: "Qualitative language + [AI estimation] tag",
+            auto_fix: lambda match: replace_with_qualitative(match)
+        },
+        {
+            name: "untagged_percentage",
+            forbidden_pattern: /\d+%\s+(?:reduction|improvement|increase)(?!\s*\[)/,
+            approved_alternative: "Conservative language + [AI estimation] tag",
+            auto_fix: lambda match: replace_with_conservative(match)
+        },
+        {
+            name: "unsourced_claim",
+            forbidden_pattern: /"[^"]+"\s+(?!.*\[Source:)/,
+            approved_alternative: "Add [Source: filename.md] attribution",
+            auto_fix: lambda match: prompt_for_source(match)
+        }
+    ],
+    warning: [
+        {
+            name: "overconfident_language",
+            pattern: /\b(will|guaranteed|definitely|certainly)\b/i,
+            suggestion: "Use 'may', 'potential', 'expected' instead"
+        },
+        {
+            name: "missing_estimation_tag",
+            pattern: /\b(estimate|approximately|around|roughly)\b(?!\s*\[)/i,
+            suggestion: "Add [AI estimation based on...] tag"
+        }
+    ]
+}
+```
+
+### Agent-Specific Rules
+
+```pseudocode
+function get_agent_guardrails(agent_type):
+    base_rules = get_common_guardrails()
+    
+    if agent_type == "observation":
+        # Problem space: extra strict
+        return base_rules + [
+            {
+                name: "no_speculation",
+                forbidden_pattern: /\b(suggests|implies|indicates|likely)\b/,
+                message: "Observation agents report facts only"
+            },
+            {
+                name: "mandatory_source",
+                required_pattern: /\[Source: [^\]]+\]/,
+                message: "Every claim must have source attribution"
+            }
+        ]
+    
+    elif agent_type == "decision":
+        # Solution space: controlled estimation
+        return base_rules + [
+            {
+                name: "conservative_estimates",
+                required_pattern: /\[AI estimation based on/,
+                message: "Estimates must include methodology"
+            },
+            {
+                name: "no_guarantees",
+                forbidden_pattern: /\b(guaranteed|will definitely|certain to)\b/,
+                message: "Use potential-based language"
+            }
+        ]
+    
+    return base_rules
+```
+
+---
+
 ## Next
 
 Continue to [Traceability](./05-traceability.md) to understand how reasoning chains are maintained.

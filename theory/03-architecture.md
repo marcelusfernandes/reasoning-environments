@@ -268,6 +268,124 @@ The architecture assumes capable models and provides the structure to make their
 
 ---
 
+## Pseudocode: Core Patterns
+
+### Orchestrator Main Loop
+
+```pseudocode
+function run_workflow(context, agents):
+    state = initialize_workflow(context)
+    
+    for agent in agents:
+        # Pre-execution hooks
+        display_guardrails(agent.constraints)
+        validate_dependencies(agent.required_inputs, state)
+        
+        if not dependencies_satisfied:
+            return error("Missing dependencies for " + agent.name)
+        
+        # Execute with curated context
+        curated_context = filter_context(state, agent.context_window)
+        result = agent.execute(curated_context)
+        
+        # Post-execution validation
+        violations = check_guardrails(result, agent.constraints)
+        
+        if violations.has_critical():
+            block_output(result, violations)
+            return error("Critical guardrail violations")
+        
+        # Store intermediate output
+        state.outputs[agent.name] = result
+        save_to_directory(result, agent.output_path)
+        
+        # Completion hooks
+        log_completion(agent.name, result.summary)
+    
+    return state.outputs
+```
+
+### Cognitive Separation
+
+```pseudocode
+# Agent A: Observe (extract without analyzing)
+function observe(sources):
+    observations = []
+    for source in sources:
+        for statement in extract_statements(source):
+            observations.append({
+                content: statement.text,
+                source: source.path,
+                line: statement.line,
+                context: statement.surrounding_context
+            })
+    # NO interpretation, NO filtering, NO classification
+    return observations
+
+# Agent B: Interpret (analyze without recommending)
+function interpret(observations):
+    patterns = []
+    for observation in observations:
+        pattern = classify_pattern(observation)
+        patterns.append({
+            observation_id: observation.id,
+            pattern_type: pattern,
+            confidence: calculate_confidence(observation),
+            supporting_evidence: [observation.source]
+        })
+    # NO recommendations, NO priorities
+    return group_into_clusters(patterns)
+
+# Agent C: Decide (recommend based on analysis)
+function decide(interpretations):
+    recommendations = []
+    for cluster in interpretations:
+        priority = calculate_priority(cluster)
+        recommendations.append({
+            action: derive_action(cluster),
+            priority: priority,
+            supporting_clusters: [cluster.id],
+            trade_offs: identify_trade_offs(cluster),
+            uncertainty: "[AI estimation based on cluster analysis]"
+        })
+    return rank_by_priority(recommendations)
+```
+
+### Contract-Based Handoff
+
+```pseudocode
+# Contract definition
+contract Agent1_to_Agent2:
+    required_fields = [
+        "id",
+        "quote",
+        "source_file",
+        "source_line", 
+        "context",
+        "frequency",
+        "severity"
+    ]
+    forbidden_fields = [
+        "type",          # Agent 2's responsibility
+        "priority",      # Agent 2's responsibility
+        "recommendation" # Agent 3's responsibility
+    ]
+
+# Handoff validation
+function validate_handoff(output, contract):
+    for field in contract.required_fields:
+        if field not in output:
+            return error("Missing required field: " + field)
+    
+    for field in contract.forbidden_fields:
+        if field in output:
+            return error("Forbidden field present: " + field)
+    
+    return success()
+```
+
+---
+
 ## Next
 
 Continue to [Guardrails Deep Dive](./04-guardrails.md) for detailed guardrail implementation patterns.
