@@ -2,8 +2,6 @@
 
 ### A Thesis on Situated Interpretability in AI Systems
 
-*By Marcelus Fernandes*
-
 ---
 
 > **General intelligence scales with models.  
